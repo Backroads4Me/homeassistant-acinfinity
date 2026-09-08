@@ -18,6 +18,7 @@ from pytest_mock import MockFixture
 from custom_components.ac_infinity.const import (
     DOMAIN,
     ControllerPropertyKey,
+    DeviceControlKey,
     CustomDevicePropertyKey,
     DevicePropertyKey,
     SensorPropertyKey,
@@ -78,7 +79,7 @@ class TestSensors:
             test_objects.entities.add_entities_callback,
         )
 
-        assert len(test_objects.entities._added_entities) == 32
+        assert len(test_objects.entities._added_entities) == 60
 
     async def test_async_setup_entry_temperature_created(self, setup):
         """Sensor for device reported temperature is created on setup for non-ai controllers"""
@@ -1160,6 +1161,65 @@ class TestSensors:
         )
         assert entity.entity_description.device_class == SensorDeviceClass.DURATION
         assert entity.device_info is not None
+
+    @pytest.mark.parametrize("port", [1, 2, 3, 4])
+    async def test_async_setup_port_number_for_each_port(self, setup, port):
+        """Sensor reporting which port a device occupies is created on setup"""
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, port, CustomDevicePropertyKey.PORT_NUMBER
+        )
+
+        assert (
+            entity.unique_id
+            == f"{DOMAIN}_{MAC_ADDR}_port_{port}_{CustomDevicePropertyKey.PORT_NUMBER}"
+        )
+        assert entity.native_value == port
+
+    @pytest.mark.parametrize(
+        "load_type,online,expected",
+        [(135, 1, "Active"), (135, 0, "Active"), (0, 1, "Active"), (0, 0, "Inactive")],
+    )
+    async def test_async_update_port_status_value_correct(
+        self, setup, load_type, online, expected
+    ):
+        """A port is active once a device type is set, or while the port is online"""
+
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_controls[(str(DEVICE_ID), 1)][
+            DeviceControlKey.LOAD_TYPE
+        ] = load_type
+        test_objects.ac_infinity._device_properties[(str(DEVICE_ID), 1)][
+            DevicePropertyKey.ONLINE
+        ] = online
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, 1, CustomDevicePropertyKey.PORT_STATUS
+        )
+        entity._handle_coordinator_update()
+
+        assert entity.native_value == expected
+
+    @pytest.mark.parametrize(
+        "load_type,expected",
+        [(135, "Ventilation Fan"), (0, "No Device Type"), (999, "Unknown (999)")],
+    )
+    async def test_async_update_connected_device_type_value_correct(
+        self, setup, load_type, expected
+    ):
+        """An unmapped load type reports its number rather than nothing"""
+
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_controls[(str(DEVICE_ID), 1)][
+            DeviceControlKey.LOAD_TYPE
+        ] = load_type
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, 1, CustomDevicePropertyKey.CONNECTED_DEVICE_TYPE
+        )
+        entity._handle_coordinator_update()
+
+        assert entity.native_value == expected
 
     @pytest.mark.parametrize("port", [1, 2, 3, 4])
     async def test_async_setup_next_state_change_for_each_port(self, setup, port):

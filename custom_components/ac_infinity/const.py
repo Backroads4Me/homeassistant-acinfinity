@@ -33,6 +33,10 @@ class MdiIcon:
     PH = "mdi:ph"
     SINE_WAVE = "mdi:sine-wave"
     WATER_OPACITY = "mdi:water-opacity"
+    NUMERIC = "mdi:numeric"
+    DEVICES = "mdi:devices"
+    IDENTIFIER = "mdi:identifier"
+    BARCODE = "mdi:barcode"
 
 
 class ConfigurationKey:
@@ -53,6 +57,9 @@ class EntityConfigValue:
 class CustomDevicePropertyKey:
     # Derived sensors
     NEXT_STATE_CHANGE = "nextStateChange"
+    PORT_NUMBER = "portNumber"
+    PORT_STATUS = "portStatus"
+    CONNECTED_DEVICE_TYPE = "connectedDeviceType"
 
 
 class AtType:

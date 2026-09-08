@@ -267,6 +267,21 @@
       },
       "next_state_change": {
         "name": "Next State Change"
+      },
+      "port_number": {
+        "name": "Port Number"
+      },
+      "port_status": {
+        "name": "Port Status"
+      },
+      "connected_device_type": {
+        "name": "Connected Device Type"
+      },
+      "device_load_type_id": {
+        "name": "Device Load Type ID"
+      },
+      "sub_device_id": {
+        "name": "Sub-Device ID"
       }
     },
     "switch": {

@@ -42,8 +42,10 @@ from .const import (
     DOMAIN,
     MdiIcon,
     ISSUE_URL,
+    AdvancedSettingsKey,
     ControllerPropertyKey,
     CustomDevicePropertyKey,
+    DeviceControlKey,
     DevicePropertyKey,
     SensorPropertyKey,
     SensorReferenceKey,
@@ -493,7 +495,145 @@ SENSOR_DESCRIPTIONS: dict[int, ACInfinitySensorSensorEntityDescription] = {
     ),
 }
 
+# The load type the controller reports for the device wired to a port. The
+# names match the device types the app offers when configuring a port.
+DEVICE_LOAD_TYPE_NAMES = {
+    0: "No Device Type",
+    1: "Grow Light",
+    2: "Humidifier",
+    3: "Dehumidifier",
+    4: "Heater",
+    5: "AC",
+    6: "Fan",
+    8: "Water Pump",
+    128: "Outlet",
+    129: "Grow Light",
+    130: "Humidifier",
+    131: "Dehumidifier",
+    132: "Heater",
+    133: "AC",
+    134: "Circulation Fan",
+    135: "Ventilation Fan",
+    136: "Peristaltic Pump",
+    137: "Water Pump",
+    138: "CO2 Regulator",
+}
+
+PORT_STATUS_ACTIVE = "Active"
+PORT_STATUS_INACTIVE = "Inactive"
+
+
+def __suitable_fn_device_load_type(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return entity.ac_infinity.get_device_control_exists(
+        device.controller.controller_id, device.device_port, DeviceControlKey.LOAD_TYPE
+    )
+
+
+def __suitable_fn_device_sub_device_id(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return entity.ac_infinity.get_device_setting_exists(
+        device.controller.controller_id, device.device_port, AdvancedSettingsKey.SUB_DEVICE_ID
+    )
+
+
+def __get_value_fn_port_number(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return device.device_port
+
+
+def __get_value_fn_port_status(entity: ACInfinityEntity, device: ACInfinityDevice):
+    # A port counts as active once a device type is configured for it, even
+    # while the controller reports the device itself as offline.
+    load_type = entity.ac_infinity.get_device_control(
+        device.controller.controller_id, device.device_port, DeviceControlKey.LOAD_TYPE, 0
+    )
+    is_online = entity.ac_infinity.get_device_property(
+        device.controller.controller_id, device.device_port, DevicePropertyKey.ONLINE, 0
+    )
+
+    return PORT_STATUS_ACTIVE if load_type > 0 or is_online == 1 else PORT_STATUS_INACTIVE
+
+
+def __get_value_fn_connected_device_type(entity: ACInfinityEntity, device: ACInfinityDevice):
+    load_type = entity.ac_infinity.get_device_control(
+        device.controller.controller_id, device.device_port, DeviceControlKey.LOAD_TYPE, 0
+    )
+
+    return DEVICE_LOAD_TYPE_NAMES.get(load_type, f"Unknown ({load_type})")
+
+
+def __get_value_fn_device_load_type(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return entity.ac_infinity.get_device_control(
+        device.controller.controller_id, device.device_port, DeviceControlKey.LOAD_TYPE, 0
+    )
+
+
+def __get_value_fn_sub_device_id(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return entity.ac_infinity.get_device_setting(
+        device.controller.controller_id, device.device_port, AdvancedSettingsKey.SUB_DEVICE_ID, None
+    )
+
+
 DEVICE_DESCRIPTIONS: list[ACInfinityDeviceSensorEntityDescription] = [
+    ACInfinityDeviceSensorEntityDescription(
+        key=CustomDevicePropertyKey.PORT_NUMBER,
+        device_class=None,
+        state_class=None,
+        native_unit_of_measurement=None,
+        suggested_unit_of_measurement=None,
+        icon=MdiIcon.NUMERIC,
+        translation_key="port_number",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=lambda x, y: True,
+        get_value_fn=__get_value_fn_port_number,
+    ),
+    ACInfinityDeviceSensorEntityDescription(
+        key=CustomDevicePropertyKey.PORT_STATUS,
+        device_class=SensorDeviceClass.ENUM,
+        state_class=None,
+        native_unit_of_measurement=None,
+        suggested_unit_of_measurement=None,
+        options=[PORT_STATUS_ACTIVE, PORT_STATUS_INACTIVE],
+        icon=MdiIcon.POWER_PLUG,
+        translation_key="port_status",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=lambda x, y: True,
+        get_value_fn=__get_value_fn_port_status,
+    ),
+    ACInfinityDeviceSensorEntityDescription(
+        key=CustomDevicePropertyKey.CONNECTED_DEVICE_TYPE,
+        device_class=None,  # an unmapped load type reports its number, so the value set is open
+        state_class=None,
+        native_unit_of_measurement=None,
+        suggested_unit_of_measurement=None,
+        icon=MdiIcon.DEVICES,
+        translation_key="connected_device_type",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=__suitable_fn_device_load_type,
+        get_value_fn=__get_value_fn_connected_device_type,
+    ),
+    ACInfinityDeviceSensorEntityDescription(
+        key=DeviceControlKey.LOAD_TYPE,
+        device_class=None,
+        state_class=None,
+        native_unit_of_measurement=None,
+        suggested_unit_of_measurement=None,
+        icon=MdiIcon.IDENTIFIER,
+        translation_key="device_load_type_id",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=__suitable_fn_device_load_type,
+        get_value_fn=__get_value_fn_device_load_type,
+    ),
+    ACInfinityDeviceSensorEntityDescription(
+        key=AdvancedSettingsKey.SUB_DEVICE_ID,
+        device_class=None,
+        state_class=None,
+        native_unit_of_measurement=None,
+        suggested_unit_of_measurement=None,
+        icon=MdiIcon.BARCODE,
+        translation_key="sub_device_id",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=__suitable_fn_device_sub_device_id,
+        get_value_fn=__get_value_fn_sub_device_id,
+    ),
     ACInfinityDeviceSensorEntityDescription(
         key=DevicePropertyKey.SPEAK,
         device_class=SensorDeviceClass.POWER_FACTOR,
