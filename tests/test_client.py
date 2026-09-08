@@ -8,6 +8,7 @@ import pytest
 from aioresponses import aioresponses
 
 from custom_components.ac_infinity.client import (
+    ADD_DEV_MODE_KEYS,
     API_URL_ADD_DEV_MODE,
     API_URL_GET_DEV_MODE_SETTING,
     API_URL_GET_DEV_SETTING,
@@ -224,10 +225,11 @@ class TestACInfinityClient:
                     DEVICE_ID, 4, {DeviceControlKey.ON_SPEED: 2}
                 )
 
-                for key in mocked.requests.keys():
+                # Settings travel in a urlencoded body, not the query string.
+                for key, calls in mocked.requests.items():
                     method, url = key
                     if method == 'POST' and API_URL_ADD_DEV_MODE in str(url):
-                        found = dict(parse_qsl(url.raw_query_string, keep_blank_values=True))
+                        found = dict(calls[0].kwargs['data'])
                         break
 
             assert found
@@ -242,14 +244,15 @@ class TestACInfinityClient:
             await self.__make_generic_set_port_settings_call_and_get_sent_payload()
         )
 
-        device_control_keys: list[str] = [
-            getattr(DeviceControlKey, attr)
-            for attr in dir(DeviceControlKey)
-            if not attr.startswith('_')
-        ]
-
-        for key in device_control_keys:
+        # The controller applies a write only when the body carries the field
+        # set the app sends. Status fields and the nested devSetting object are
+        # deliberately absent.
+        for key in ADD_DEV_MODE_KEYS:
             assert key in payload, f"Key {key} is missing"
+
+        assert DeviceControlKey.DEV_SETTING not in payload
+        assert DeviceControlKey.MODE_SET_ID not in payload
+        assert DeviceControlKey.POWER_STATE not in payload
 
     async def test_set_device_port_setting_value_changed_in_payload(self):
         """When setting a value, the value is updated in the built payload before sending"""

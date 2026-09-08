@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from custom_components.ac_infinity.client import ACInfinityClient, ACInfinityClientInvalidAuth, \
-    ACInfinityClientCannotConnect, ACInfinityClientRequestFailed
+    ACInfinityClientCannotConnect, ACInfinityClientRequestFailed, ACInfinityClientRecoveryFailed
 from .const import (
     AI_CONTROLLER_TYPES,
     DOMAIN,
@@ -88,6 +88,11 @@ class ACInfinityController:
     def controller_name(self) -> str:
         """The name of the controller as set in the Android/iOS app"""
         return self._controller_name
+
+    @property
+    def controller_type(self) -> int:
+        """The UIS model identifier, sent as the devType header on writes"""
+        return self._controller_type
 
     @property
     def is_ai_controller(self) -> bool:
@@ -745,13 +750,19 @@ class ACInfinityService:
         if device.controller.is_ai_controller:
             await self.__update_ai_control_and_settings(device.controller.controller_id, device.device_port, key_values)
         else:
-            await self.__update_device_controls(device.controller.controller_id, device.device_port, key_values)
+            await self.__update_device_controls(
+                device.controller.controller_id,
+                device.device_port,
+                key_values,
+                device.controller.controller_type,
+            )
 
     async def __update_device_controls(
         self,
         controller_id: str | int,
         device_port: int,
         key_values: dict[str, int],
+        controller_type: int | None = None,
     ):
         """Update the values of a set of settings via the AC Infinity API
 
@@ -763,7 +774,9 @@ class ACInfinityService:
         try_count = 0
         while True:
             try:
-                await self._client.update_device_controls(controller_id, device_port, key_values)
+                await self._client.update_device_controls(
+                    controller_id, device_port, key_values, controller_type
+                )
                 return
 
             except (
@@ -780,8 +793,8 @@ class ACInfinityService:
                 else:
                     _LOGGER.error(ACINFINITY_API_ERROR, exc_info=ex)
                     raise
-            except ACInfinityClientInvalidAuth as ex:
-                _LOGGER.error("Unable to update device controls: Authentication failed", exc_info=ex)
+            except (ACInfinityClientInvalidAuth, ACInfinityClientRecoveryFailed) as ex:
+                _LOGGER.error("Unable to update device controls: Authentication recovery failed", exc_info=ex)
                 raise
             except Exception as ex:
                 _LOGGER.error("Unable to update device controls: Unexpected error", exc_info=ex)

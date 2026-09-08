@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 from asyncio import Future
 
 import aiohttp
@@ -224,7 +225,7 @@ class TestACInfinity:
     ):
         """getting a device property returns the correct value"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         result = ac_infinity.get_controller_property_exists(device_id, property_key)
         assert result == (value if device_id != "12345" else False)
@@ -244,7 +245,7 @@ class TestACInfinity:
     ):
         """getting a device property returns the correct value"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         result = ac_infinity.get_controller_property(device_id, property_key)
         assert result == value
@@ -262,7 +263,7 @@ class TestACInfinity:
     ):
         """the absence of a value should return None instead of keyerror"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         result = ac_infinity.get_controller_property(device_id, property_key)
         assert result is None
@@ -281,7 +282,7 @@ class TestACInfinity:
     ):
         """getting a device property returns the correct value"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._sensor_properties = SENSOR_PROPERTIES_DATA
+        ac_infinity._sensor_properties = deepcopy(SENSOR_PROPERTIES_DATA)
 
         result = ac_infinity.get_sensor_property_exists(
             device_id,
@@ -304,7 +305,7 @@ class TestACInfinity:
     ):
         """getting a device property returns the correct value"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._sensor_properties = SENSOR_PROPERTIES_DATA
+        ac_infinity._sensor_properties = deepcopy(SENSOR_PROPERTIES_DATA)
 
         result = ac_infinity.get_sensor_property(
             device_id,
@@ -354,7 +355,7 @@ class TestACInfinity:
     ):
         """the absence of a value should return None instead of keyerror"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         result = ac_infinity.get_sensor_property(
             device_id, access_port, sensor_type, property_key
@@ -375,8 +376,8 @@ class TestACInfinity:
     ):
         """getting a port property gets the correct property from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_properties = DEVICE_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_properties = deepcopy(DEVICE_PROPERTIES_DATA)
 
         result = ac_infinity.get_device_property_exists(device_id, 1, property_key)
         assert result == (value if device_id != "12345" else False)
@@ -396,8 +397,8 @@ class TestACInfinity:
     ):
         """getting a port property gets the correct property from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_properties = DEVICE_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_properties = deepcopy(DEVICE_PROPERTIES_DATA)
 
         result = ac_infinity.get_device_property(device_id, port_num, property_key)
         assert result == value
@@ -417,8 +418,8 @@ class TestACInfinity:
     ):
         """the absence of a value should return None instead of keyerror"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_properties = DEVICE_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_properties = deepcopy(DEVICE_PROPERTIES_DATA)
 
         result = ac_infinity.get_device_property(device_id, port_num, property_key)
         assert result is None
@@ -426,7 +427,7 @@ class TestACInfinity:
     async def test_get_device_all_device_meta_data_returns_meta_data(self, mock_client):
         """getting port device ids should return ids"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         result = ac_infinity.get_all_controller_properties()
         assert len(result) > 0
@@ -516,7 +517,9 @@ class TestACInfinity:
     ):
         """getting device returns a model object that contains correct device info for the device registry"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        # Copy before mutating: the fixture is shared, and leaving a stray
+        # devType behind makes later assertions order dependent.
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
         ac_infinity._controller_properties[str(DEVICE_ID)]["devType"] = dev_type
 
         result = ac_infinity.get_all_controller_properties()
@@ -547,8 +550,8 @@ class TestACInfinity:
     ):
         """getting a port setting gets the correct setting from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         result = ac_infinity.get_device_control_exists(device_id, 1, setting_key)
         assert result == (value if device_id != "12345" else False)
@@ -571,8 +574,8 @@ class TestACInfinity:
     ):
         """getting a port setting gets the correct setting from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         result = ac_infinity.get_device_control(device_id, 1, setting_key)
         assert result == value
@@ -584,8 +587,8 @@ class TestACInfinity:
     ):
         """getting a port setting returns 0 instead of null if the key exists but the value is null"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ac_infinity._device_controls[(str(DEVICE_ID), 1)][DeviceControlKey.SURPLUS] = None
 
@@ -608,9 +611,9 @@ class TestACInfinity:
     ):
         """getting a port setting gets the correct setting from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         result = ac_infinity.get_controller_setting_exists(device_id, setting_key)
         assert result == (value if device_id != "12345" else False)
@@ -628,9 +631,9 @@ class TestACInfinity:
     ):
         """getting a port setting gets the correct setting from the correct port"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         result = ac_infinity.get_controller_setting(device_id, setting_key)
         assert result == value
@@ -642,9 +645,9 @@ class TestACInfinity:
     ):
         """getting a port setting returns 0 instead of null if the key exists but the value is null"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         ac_infinity._device_settings[(str(DEVICE_ID), 1)][
             AdvancedSettingsKey.CALIBRATE_HUMIDITY
@@ -672,8 +675,8 @@ class TestACInfinity:
     ):
         """the absence of a value should return None instead of keyerror"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         result = ac_infinity.get_device_setting(device_id, port_num, setting_key)
         assert result is None
@@ -696,8 +699,8 @@ class TestACInfinity:
     ):
         """the absence of a value should return None instead of keyerror"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         result = ac_infinity.get_device_control(device_id, 1, setting_key)
         assert result is None
@@ -710,13 +713,13 @@ class TestACInfinity:
         mock_client.update_device_controls.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         await ac_infinity.update_device_control(controller.devices[0], DeviceControlKey.AT_TYPE, 2)
 
-        mock_client.update_device_controls.assert_called_with(str(DEVICE_ID), 1, {DeviceControlKey.AT_TYPE: 2})
+        mock_client.update_device_controls.assert_called_with(str(DEVICE_ID), 1, {DeviceControlKey.AT_TYPE: 2}, ControllerType.UIS_69_PRO)
 
     async def test_update_port_controls(self, mock_client):
         future: Future = asyncio.Future()
@@ -726,13 +729,13 @@ class TestACInfinity:
         mock_client.update_device_controls.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         await ac_infinity.update_device_controls(controller.devices[0], {DeviceControlKey.AT_TYPE: 2})
 
-        mock_client.update_device_controls.assert_called_with(str(DEVICE_ID), 1, {DeviceControlKey.AT_TYPE: 2})
+        mock_client.update_device_controls.assert_called_with(str(DEVICE_ID), 1, {DeviceControlKey.AT_TYPE: 2}, ControllerType.UIS_69_PRO)
 
     async def test_update_port_controls_retried_on_failure(self, mocker: MockFixture, mock_client):
         """updating settings should be tried 5 times before failing"""
@@ -743,8 +746,8 @@ class TestACInfinity:
         mock_client.update_device_controls.side_effect = ACInfinityClientCannotConnect("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientCannotConnect):
@@ -772,8 +775,8 @@ class TestACInfinity:
         mock_client.update_device_controls.side_effect = exception_type
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(type(exception_type)):
@@ -793,8 +796,8 @@ class TestACInfinity:
         mock_client.update_device_controls.side_effect = ACInfinityClientInvalidAuth("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientInvalidAuth):
@@ -814,8 +817,8 @@ class TestACInfinity:
         mock_client.update_device_controls.side_effect = ValueError("unexpected error")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ValueError):
@@ -832,7 +835,7 @@ class TestACInfinity:
         mock_client.update_device_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         await ac_infinity.update_controller_setting(
@@ -851,8 +854,8 @@ class TestACInfinity:
         mock_client.update_device_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         await ac_infinity.update_controller_settings(
@@ -866,7 +869,7 @@ class TestACInfinity:
     async def test_update_controller_settings_raises_for_ai_controller(self, mock_client):
         """updating controller settings should raise NotImplementedError for AI controllers"""
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
 
@@ -886,9 +889,9 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ACInfinityClientCannotConnect("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientCannotConnect):
@@ -918,9 +921,9 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = exception_type
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(type(exception_type)):
@@ -942,9 +945,9 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ACInfinityClientInvalidAuth("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientInvalidAuth):
@@ -966,9 +969,9 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ValueError("unexpected error")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
-        ac_infinity._device_settings = DEVICE_SETTINGS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
+        ac_infinity._device_settings = deepcopy(DEVICE_SETTINGS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ValueError):
@@ -987,13 +990,13 @@ class TestACInfinity:
         mock_client.update_device_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_properties = DEVICE_PROPERTIES_DATA
-        ac_infinity._device_properties[(str(DEVICE_ID), 1)][
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_properties = deepcopy(DEVICE_PROPERTIES_DATA)
+        properties = deepcopy(CONTROLLER_PROPERTIES)
+        properties[ControllerPropertyKey.DEVICE_INFO][ControllerPropertyKey.PORTS][0][
             DevicePropertyKey.NAME
         ] = DEVICE_NAME
-
-        controller = ACInfinityController(CONTROLLER_PROPERTIES)
+        controller = ACInfinityController(properties)
         await ac_infinity.update_device_setting(
             controller.devices[0], AdvancedSettingsKey.DYNAMIC_TRANSITION_HUMIDITY, 2
         )
@@ -1013,13 +1016,13 @@ class TestACInfinity:
         mock_client.update_device_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_properties = DEVICE_PROPERTIES_DATA
-        ac_infinity._device_properties[(str(DEVICE_ID), 1)][
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_properties = deepcopy(DEVICE_PROPERTIES_DATA)
+        properties = deepcopy(CONTROLLER_PROPERTIES)
+        properties[ControllerPropertyKey.DEVICE_INFO][ControllerPropertyKey.PORTS][0][
             DevicePropertyKey.NAME
         ] = DEVICE_NAME
-
-        controller = ACInfinityController(CONTROLLER_PROPERTIES)
+        controller = ACInfinityController(properties)
         await ac_infinity.update_device_settings(
             controller.devices[0], {AdvancedSettingsKey.DYNAMIC_TRANSITION_HUMIDITY: 2}
         )
@@ -1040,8 +1043,8 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ACInfinityClientCannotConnect("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientCannotConnect):
@@ -1071,8 +1074,8 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = exception_type
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(type(exception_type)):
@@ -1094,8 +1097,8 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ACInfinityClientInvalidAuth("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientInvalidAuth):
@@ -1117,8 +1120,8 @@ class TestACInfinity:
         mock_client.update_device_settings.side_effect = ValueError("unexpected error")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         controller = ACInfinityController(CONTROLLER_PROPERTIES)
         with pytest.raises(ValueError):
@@ -1138,8 +1141,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         await ac_infinity.update_device_control(ai_controller.devices[0], DeviceControlKey.AT_TYPE, 2)
@@ -1157,8 +1160,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         await ac_infinity.update_device_controls(ai_controller.devices[0], {DeviceControlKey.AT_TYPE: 2})
@@ -1176,8 +1179,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.return_value = future
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         await ac_infinity.update_device_settings(
@@ -1197,8 +1200,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.side_effect = ACInfinityClientCannotConnect("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientCannotConnect):
@@ -1226,8 +1229,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.side_effect = exception_type
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         with pytest.raises(type(exception_type)):
@@ -1247,8 +1250,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.side_effect = ACInfinityClientInvalidAuth("unit-test")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         with pytest.raises(ACInfinityClientInvalidAuth):
@@ -1268,8 +1271,8 @@ class TestACInfinity:
         mock_client.update_ai_device_control_and_settings.side_effect = ValueError("unexpected error")
 
         ac_infinity = ACInfinityService(mock_client)
-        ac_infinity._controller_properties = CONTROLLER_PROPERTIES_DATA
-        ac_infinity._device_controls = DEVICE_CONTROLS_DATA
+        ac_infinity._controller_properties = deepcopy(CONTROLLER_PROPERTIES_DATA)
+        ac_infinity._device_controls = deepcopy(DEVICE_CONTROLS_DATA)
 
         ai_controller = ACInfinityController(AI_CONTROLLER_PROPERTIES)
         with pytest.raises(ValueError):

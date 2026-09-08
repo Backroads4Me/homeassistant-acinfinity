@@ -1,5 +1,7 @@
+import hashlib
 import json
 import logging
+import time
 from urllib.parse import urlencode
 
 import aiohttp
@@ -18,6 +20,87 @@ API_URL_MODE_AND_SETTINGS = "/api/dev/modeAndSetting"
 API_URL_GET_DEV_SETTING = "/api/dev/getDevSetting"
 API_URL_UPDATE_ADV_SETTING = "/api/dev/updateAdvSetting"
 
+# Version name of the Android build whose signing scheme this client reproduces.
+# It is an input to the request signature, so it must match the value sent in
+# the version header.
+APP_VERSION = "2.0.8"
+
+
+ADD_DEV_MODE_KEYS: tuple[str, ...] = (
+    "acitveTimerOff", "acitveTimerOn", "activeCycleOff", "activeCycleOn",
+    "activeHh", "activeHt", "activeHtVpd", "activeHtVpdNums",
+    "activeLh", "activeLt", "activeLtVpd", "activeLtVpdNums",
+    "atType", "co2FanHighSwitch", "co2FanHighValue", "co2LowSwitch",
+    "co2LowValue", "devHh", "devHt", "devHtf",
+    "devId", "devLh", "devLt", "devLtf",
+    "devMacAddr",
+    "ecOrTds", "ecTdsLowSwitchEc", "ecTdsLowSwitchTds", "ecTdsLowValueEcMs",
+    "ecTdsLowValueEcUs", "ecTdsLowValueTdsPpm", "ecTdsLowValueTdsPpt", "ecUnit",
+    "externalPort", "hTrend", "humidity", "insidePort",
+    "insidePortAi", "insideType", "insideTypeAi", "isOpenAutomation",
+    "leafTempInside", "masterPort", "modeType", "moistureLowSwitch",
+    "moistureLowValue", "offSpead", "onSelfSpead", "onSpead",
+    "onlyUpdateSpeed", "outsidePort", "outsidePortAi", "outsideType",
+    "outsideTypeAi", "phHighSwitch", "phHighValue", "phLowSwitch",
+    "phLowValue", "schedEndtTime", "schedStartTime", "settingMode",
+    "settingModeAi", "speak", "surplus", "tTrend",
+    "targetHumi", "targetHumiAi", "targetHumiSwitch", "targetHumiSwitchAi",
+    "targetTSwitch", "targetTSwitchAi", "targetTemp", "targetTempAi",
+    "targetTempF", "targetTempFAi", "targetVpd", "targetVpdAi",
+    "targetVpdSwitch", "targetVpdSwitchAi", "tdsUnit", "temperature",
+    "temperatureF", "trend", "unit", "vpdSettingMode",
+    "vpdSettingModeAi", "waterLevelLowSwitch", "waterTempHighSwitch", "waterTempHighValue",
+    "waterTempHighValueF", "waterTempLowSwitch", "waterTempLowValue", "waterTempLowValueF",
+    "waterTempSettingMode", "waterTempTargetSwitch", "waterTempTargetValue", "waterTempTargetValueF",
+)
+
+# Fields the app sends that none of the observed read responses returned.
+# 255 and 15 are the
+# "nothing bound" sentinels for the external sensor ports; sending 0 instead
+# names port and sensor type 0, which the controller rejects.
+ADD_DEV_MODE_DEFAULTS: dict[str, int | str] = {
+    "insidePort": 255,
+    "insidePortAi": 255,
+    "outsidePort": 255,
+    "outsidePortAi": 255,
+    "insideType": 15,
+    "insideTypeAi": 15,
+    "outsideType": 15,
+    "outsideTypeAi": 15,
+    "settingModeAi": 1,
+    "vpdSettingModeAi": 1,
+    "targetTempFAi": 32,
+    # The app sends this empty even though the controller has a MAC address.
+    "devMacAddr": "",
+}
+
+
+def build_sign(
+    access_token: str | None,
+    app_version: str,
+    secret_id: str | None,
+    request_app: str | None,
+    request_id: str,
+) -> str:
+    """Sign a request the way the AC Infinity app does.
+
+    The signature covers the access token, app version, the server-issued
+    secretId and requestApp, and the request timestamp. It does not cover the
+    request body.
+    """
+
+    def md5(value: str) -> str:
+        return hashlib.md5(value.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+    left = md5(access_token + app_version) if access_token else md5(app_version)
+    right = (
+        md5(secret_id + request_app + request_id)
+        if secret_id and request_app
+        else md5(request_id)
+    )
+
+    return md5(left + right)
+
 
 class ACInfinityClient:
     """Encapsulates http calls to the AC Infinity API"""
@@ -33,6 +116,9 @@ class ACInfinityClient:
         self._email = email
         self._password = password
         self._user_id: str | None = None
+        self._access_token: str | None = None
+        self._secret_id: str | None = None
+        self._request_app: str | None = None
         self._session: aiohttp.ClientSession | None = None
 
     async def login(self):
@@ -48,7 +134,22 @@ class ACInfinityClient:
             {"appEmail": self._email, "appPasswordl": normalized_password},
             headers,
         )
-        self._user_id = response["data"]["appId"]
+        data = response["data"]
+        self._user_id = data["appId"]
+
+        # The signature inputs are issued by the server at login. Writes are
+        # rejected with a 403 without them.
+        self._access_token = data.get("token") or data["appId"]
+        self._secret_id = data.get("secretId")
+        self._request_app = data.get("requestApp")
+
+        if not self._secret_id or not self._request_app:
+            _LOGGER.warning(
+                "Login response is missing signing material (secretId present: %s, "
+                "requestApp present: %s). Writes to controller settings will fail.",
+                bool(self._secret_id),
+                bool(self._request_app),
+            )
 
     def is_logged_in(self):
         """returns true if the user id is set, false otherwise"""
@@ -88,10 +189,16 @@ class ACInfinityClient:
         return body["data"]
 
     @staticmethod
-    def __transfer_values(device_control_keys: list[str], new_values: dict, existing_values: dict):
+    def __transfer_values(device_control_keys: list[str], new_values: dict, existing_values: dict, defaults: dict | None = None):
         updated: dict[str, str | int | bool] = {}
+        defaults = defaults or {}
         for key in device_control_keys:
-            value = new_values.get(key, existing_values.get(key, 0))
+            value = new_values.get(key, existing_values.get(key))
+            if value is None:
+                # A key the controller reports as null carries no more meaning
+                # than one it omits, so both take the documented default.
+                value = defaults.get(key, 0)
+
             if value is None:
                 updated[key] = 0
             elif isinstance(value, (dict, list)):
@@ -104,7 +211,11 @@ class ACInfinityClient:
         return updated
 
     async def update_device_controls(
-        self, controller_id: str | int, device_port: int, key_values: dict[str, int]
+        self,
+        controller_id: str | int,
+        device_port: int,
+        key_values: dict[str, int],
+        controller_type: int | None = None,
     ):
         """Sets the provided settings on a port to a new values
 
@@ -121,14 +232,28 @@ class ACInfinityClient:
         )
         existing_values = body["data"]
 
-        device_control_keys: list[str] = [
-            getattr(DeviceControlKey, attr)
-            for attr in dir(DeviceControlKey)
-            if not attr.startswith('_')
-        ]
+        # Port settings live alongside the nested devSetting object; flatten it
+        # so both are available as a single source of values.
+        # A null at the top level says nothing about the field, so it must not
+        # displace a value the nested object does carry.
+        flattened = dict(existing_values.get(DeviceControlKey.DEV_SETTING) or {})
+        flattened.update({k: v for k, v in existing_values.items() if v is not None})
 
-        updated = self.__transfer_values(device_control_keys, key_values, existing_values)
-        _ = await self.__post(f"{API_URL_ADD_DEV_MODE}?{urlencode(updated)}", None, headers)
+        updated = self.__transfer_values(
+            list(ADD_DEV_MODE_KEYS), key_values, flattened, ADD_DEV_MODE_DEFAULTS
+        )
+
+        # Settings record N belongs to the port the device list calls N.
+        # Record 0 is the controller's ALL record, not port 1.
+        updated[DeviceControlKey.EXTERNAL_PORT] = int(device_port)
+
+        # The controller applies a mode change only when the settings arrive as
+        # a signed request whose urlencoded body carries exactly the fields the
+        # app sends. Enumerating every known control key instead submits status
+        # fields and the nested devSetting object, which the server accepts with
+        # a 200 response and the controller discards.
+        form_body = {key: str(value) for key, value in updated.items()}
+        _ = await self.__post_signed(API_URL_ADD_DEV_MODE, form_body, controller_type)
 
     async def update_device_settings(
         self, controller_id: str | int, device_port: int, device_name: str, key_values: dict[str, int]
@@ -269,6 +394,67 @@ class ACInfinityClient:
 
         return headers
 
+    @staticmethod
+    def __is_expired_session(error: "ACInfinityClientRequestFailed") -> bool:
+        """True when the API rejected a signed request as an expired session."""
+        body = error.args[0] if error.args else None
+        return isinstance(body, dict) and body.get("code") == 403
+
+    async def __post_signed(self, path: str, form_body: dict, dev_type: int | None):
+        """POST a signed request, logging in again if the session was rejected.
+
+        The access token the signature is built from expires, and the app
+        obtains fresh credentials on a 403 rather than replaying dead ones.
+
+        Recovery failures are terminal for the service operation. Invalid
+        credentials remain distinct from connectivity and request failures.
+        """
+        try:
+            return await self.__post(path, form_body, self.__create_signed_headers(dev_type))
+        except ACInfinityClientRequestFailed as err:
+            if not self.__is_expired_session(err):
+                raise
+
+            _LOGGER.info("Signed request rejected; obtaining fresh credentials")
+
+        try:
+            await self.login()
+            return await self.__post(path, form_body, self.__create_signed_headers(dev_type))
+        except ACInfinityClientRequestFailed as err:
+            if self.__is_expired_session(err):
+                raise ACInfinityClientInvalidAuth from err
+            raise ACInfinityClientRecoveryFailed("Settings recovery request failed") from err
+        except (ACInfinityClientCannotConnect, aiohttp.ClientError, TimeoutError) as err:
+            raise ACInfinityClientRecoveryFailed("Unable to complete settings recovery") from err
+
+    def __create_signed_headers(self, dev_type: int | None = None) -> dict:
+        """Creates headers carrying a request signature.
+
+        The controller applies a settings write only when the request is
+        signed; an unsigned write is answered with a 403 "Login Expired".
+        """
+        request_id = str(int(time.time() * 1000))
+        access_token = self._access_token or self._user_id
+
+        headers = {
+            "User-Agent": "okhttp/4.12.0",
+            "token": access_token or "",
+            "requestApp": self._request_app or "",
+            "version": APP_VERSION,
+            "requestId": request_id,
+            "sign": build_sign(
+                access_token,
+                APP_VERSION,
+                self._secret_id,
+                self._request_app,
+                request_id,
+            ),
+            "minversion": "",
+            "devType": str(dev_type) if dev_type is not None else "",
+        }
+
+        return headers
+
 
 class ACInfinityClientCannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
@@ -276,6 +462,10 @@ class ACInfinityClientCannotConnect(HomeAssistantError):
 
 class ACInfinityClientInvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
+
+
+class ACInfinityClientRecoveryFailed(HomeAssistantError):
+    """A failed recovery that must not reenter ordinary request retries."""
 
 
 class ACInfinityClientRequestFailed(HomeAssistantError):
