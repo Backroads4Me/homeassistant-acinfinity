@@ -2,6 +2,10 @@ import asyncio
 from asyncio import Future
 
 import pytest
+from copy import deepcopy
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from homeassistant.components.number import async_set_value
 from homeassistant.components.number import NumberDeviceClass
 from pytest_mock import MockFixture
 
@@ -439,9 +443,12 @@ class TestNumbers:
             DeviceControlKey.TARGET_TEMP,
         ],
     )
+    # A null setpoint reports unknown rather than 0. Zero is a legitimate
+    # setpoint here, and on a Fahrenheit controller it displays as 32 F, which
+    # is the reading dalinicus#152 describes.
     @pytest.mark.parametrize(
         "value, expected",
-        [(0, 0), (90, 90), (None, 0)],
+        [(0, 0), (90, 90), (None, None)],
     )
     @pytest.mark.parametrize("port", [1, 2, 3, 4])
     async def test_async_update_temp_trigger_correct(
@@ -467,8 +474,17 @@ class TestNumbers:
         test_objects.write_ha_mock.assert_called()
 
     @pytest.mark.parametrize(
-        "c,f",
-        [(0, 32), (90, 194), (46, 115)],
+        "c,expected_c,f",
+        [
+            (0, 0, 32),
+            (90, 90, 194),
+            (46, 46, 115),
+            ((84 - 32) / 1.8, 29, 84),
+            ((83 - 32) / 1.8, 28, 83),
+            (28.49, 28, 83),
+            (28.51, 29, 83),
+            ((105 - 32) / 1.8, 41, 105),
+        ],
     )
     @pytest.mark.parametrize(
         "setting, f_setting",
@@ -486,7 +502,7 @@ class TestNumbers:
     )
     @pytest.mark.parametrize("port", [1, 2, 3, 4])
     async def test_async_set_temp_trigger_value(
-        self, setup, setting, c, f, port, f_setting
+        self, setup, setting, c, expected_c, f, port, f_setting
     ):
         """Reported sensor value matches the value in the json payload"""
         future: Future = asyncio.Future()
@@ -502,9 +518,165 @@ class TestNumbers:
         await entity.async_set_native_value(c)
 
         test_objects.port_control_sets_mock.assert_called_with(
-            entity._device, {setting: c, f_setting: f}
+            entity._device, {setting: expected_c, f_setting: f}
         )
         test_objects.refresh_mock.assert_called()
+
+    @pytest.mark.parametrize(
+        "setting,f_setting",
+        [
+            (DeviceControlKey.AUTO_TEMP_LOW_TRIGGER, DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F),
+            (DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER, DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F),
+            (DeviceControlKey.TARGET_TEMP, DeviceControlKey.TARGET_TEMP_F),
+        ],
+    )
+    @pytest.mark.parametrize("port", [1, 2, 3, 4])
+    async def test_auto_mode_temp_read_from_fahrenheit_on_fahrenheit_controller(
+        self, setup, setting, f_setting, port
+    ):
+        """A Fahrenheit controller reports the Fahrenheit copy, converted to Celsius.
+
+        Whole degrees Celsius cannot represent 92 F, so reading the Celsius copy
+        would report 91.4 F back to the user.
+        """
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_settings[(str(DEVICE_ID), 0)][
+            AdvancedSettingsKey.TEMP_UNIT
+        ] = 0
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, port, setting
+        )
+        # Copy before mutating: the whole mapping is shared across tests, so
+        # replacing an entry in it leaks into every later test.
+        test_objects.ac_infinity._device_controls = deepcopy(
+            test_objects.ac_infinity._device_controls
+        )
+        controls = test_objects.ac_infinity._device_controls[(str(DEVICE_ID), port)]
+        controls[setting] = 33
+        controls[f_setting] = 92
+        entity._handle_coordinator_update()
+
+        assert isinstance(entity, ACInfinityDeviceNumberEntity)
+        assert entity.native_value == pytest.approx((92 - 32) / 1.8)
+        assert round(entity.native_value * 1.8 + 32) == 92
+
+    @pytest.mark.parametrize(
+        "setting,f_setting",
+        [
+            (DeviceControlKey.AUTO_TEMP_LOW_TRIGGER, DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F),
+            (DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER, DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F),
+            (DeviceControlKey.TARGET_TEMP, DeviceControlKey.TARGET_TEMP_F),
+        ],
+    )
+    @pytest.mark.parametrize("shape", ["both_null", "both_absent"])
+    async def test_auto_mode_temp_is_unknown_when_neither_copy_is_usable(
+        self, setup, setting, f_setting, shape
+    ):
+        """Zero is a legitimate setpoint, so it must not stand in for no data.
+
+        Reported as 0 C, a Fahrenheit reader sees 32 F, which is what the
+        earlier default produced and what issue 152 describes.
+        """
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_settings[(str(DEVICE_ID), 0)][
+            AdvancedSettingsKey.TEMP_UNIT
+        ] = 0
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, 1, setting
+        )
+        # Copy before mutating: the whole mapping is shared across tests, so
+        # replacing an entry in it leaks into every later test.
+        test_objects.ac_infinity._device_controls = deepcopy(
+            test_objects.ac_infinity._device_controls
+        )
+        controls = test_objects.ac_infinity._device_controls[(str(DEVICE_ID), 1)]
+        if shape == "both_null":
+            controls[setting] = None
+            controls[f_setting] = None
+        else:
+            controls.pop(setting, None)
+            controls.pop(f_setting, None)
+        entity._handle_coordinator_update()
+
+        assert isinstance(entity, ACInfinityDeviceNumberEntity)
+        assert entity.native_value is None
+
+    @pytest.mark.parametrize(
+        "setting,f_setting",
+        [
+            (DeviceControlKey.AUTO_TEMP_LOW_TRIGGER, DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F),
+            (DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER, DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F),
+            (DeviceControlKey.TARGET_TEMP, DeviceControlKey.TARGET_TEMP_F),
+        ],
+    )
+    @pytest.mark.parametrize("missing", [True, False])
+    async def test_auto_mode_temp_falls_back_to_celsius_when_fahrenheit_absent(
+        self, setup, setting, f_setting, missing
+    ):
+        """A record with no Fahrenheit copy reports its Celsius one.
+
+        Defaulting the absent copy would report a 32 F setpoint the controller
+        never held.
+        """
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_settings[(str(DEVICE_ID), 0)][
+            AdvancedSettingsKey.TEMP_UNIT
+        ] = 0
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, 1, setting
+        )
+        # Copy before mutating: the whole mapping is shared across tests, so
+        # replacing an entry in it leaks into every later test.
+        test_objects.ac_infinity._device_controls = deepcopy(
+            test_objects.ac_infinity._device_controls
+        )
+        controls = test_objects.ac_infinity._device_controls[(str(DEVICE_ID), 1)]
+        controls[setting] = 33
+        if missing:
+            controls.pop(f_setting, None)
+        else:
+            controls[f_setting] = None
+        entity._handle_coordinator_update()
+
+        assert isinstance(entity, ACInfinityDeviceNumberEntity)
+        assert entity.native_value == 33
+
+    @pytest.mark.parametrize(
+        "setting,f_setting",
+        [
+            (DeviceControlKey.AUTO_TEMP_LOW_TRIGGER, DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F),
+            (DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER, DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F),
+            (DeviceControlKey.TARGET_TEMP, DeviceControlKey.TARGET_TEMP_F),
+        ],
+    )
+    @pytest.mark.parametrize("port", [1, 2, 3, 4])
+    async def test_auto_mode_temp_read_from_celsius_on_celsius_controller(
+        self, setup, setting, f_setting, port
+    ):
+        """A Celsius controller reports the Celsius copy unchanged."""
+        test_objects: ACTestObjects = setup
+        test_objects.ac_infinity._device_settings[(str(DEVICE_ID), 0)][
+            AdvancedSettingsKey.TEMP_UNIT
+        ] = 1
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, port, setting
+        )
+        # Copy before mutating: the whole mapping is shared across tests, so
+        # replacing an entry in it leaks into every later test.
+        test_objects.ac_infinity._device_controls = deepcopy(
+            test_objects.ac_infinity._device_controls
+        )
+        controls = test_objects.ac_infinity._device_controls[(str(DEVICE_ID), port)]
+        controls[setting] = 33
+        controls[f_setting] = 92
+        entity._handle_coordinator_update()
+
+        assert isinstance(entity, ACInfinityDeviceNumberEntity)
+        assert entity.native_value == 33
 
     @pytest.mark.parametrize(
         "setting",
@@ -989,3 +1161,23 @@ class TestNumbers:
             entity._device, AdvancedSettingsKey.SUNRISE_TIMER_DURATION, 156
         )
         test_objects.refresh_mock.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_unknown_number_accepts_set_service(mocker):
+    objects = setup_entity_mocks(mocker)
+    service = objects.ac_infinity
+    service._device_controls = deepcopy(service._device_controls)
+    service._device_settings = deepcopy(service._device_settings)
+    service._device_settings[(str(DEVICE_ID), 0)][AdvancedSettingsKey.TEMP_UNIT] = 1
+    entity = await execute_and_get_device_entity(objects, async_setup_entry, 1, DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER)
+    record = service._device_controls[(str(DEVICE_ID), 1)]
+    record['devHt'] = None
+    record['devHtf'] = None
+    entity._handle_coordinator_update()
+    assert entity.native_value is None
+    assert entity.value is None
+    entity.hass = SimpleNamespace(config=SimpleNamespace(units=SimpleNamespace(temperature_unit='°C')))
+    service.update_device_controls = AsyncMock()
+    await async_set_value(entity, SimpleNamespace(data={'value': 41}))
+    service.update_device_controls.assert_awaited_once_with(entity.device_port, {'devHt': 41, 'devHtf': 106})

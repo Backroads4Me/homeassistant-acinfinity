@@ -175,6 +175,68 @@ def __get_value_fn_cal_temp(entity: ACInfinityEntity, controller: ACInfinityCont
     )
 
 
+# The controller keeps a Celsius and a Fahrenheit copy of each auto mode
+# setpoint. Whole degrees Celsius cannot represent every Fahrenheit value, so on
+# a Fahrenheit controller the Celsius copy is up to a degree out. Read whichever
+# copy the controller is keeping, converting to the entity's native Celsius.
+__AUTO_MODE_TEMP_FAHRENHEIT_KEYS = {
+    DeviceControlKey.AUTO_TEMP_LOW_TRIGGER: DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F,
+    DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER: DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F,
+    DeviceControlKey.TARGET_TEMP: DeviceControlKey.TARGET_TEMP_F,
+}
+
+
+def __suitable_fn_auto_mode_temp(entity: ACInfinityEntity, device: ACInfinityDevice):
+    """Require Celsius on Celsius controllers, or either copy on Fahrenheit ones.
+
+    Fahrenheit controllers can fall back to a populated Celsius copy. Keys
+    with null values remain suitable so an entity can report unknown.
+    """
+    if __suitable_fn_device_control_default(entity, device):
+        return True
+
+    temp_unit = entity.ac_infinity.get_controller_setting(
+        device.controller.controller_id, AdvancedSettingsKey.TEMP_UNIT, 0
+    )
+
+    if temp_unit > 0:
+        return False
+
+    return entity.ac_infinity.get_device_control_exists(
+        device.controller.controller_id,
+        device.device_port,
+        __AUTO_MODE_TEMP_FAHRENHEIT_KEYS[entity.data_key],
+    )
+
+
+def __get_value_fn_auto_mode_temp(entity: ACInfinityEntity, device: ACInfinityDevice):
+    temp_unit = entity.ac_infinity.get_controller_setting(
+        device.controller.controller_id, AdvancedSettingsKey.TEMP_UNIT, 0
+    )
+
+    celsius = entity.ac_infinity.get_device_control(
+        device.controller.controller_id, device.device_port, entity.data_key, None
+    )
+
+    if temp_unit > 0:
+        return celsius
+
+    fahrenheit = entity.ac_infinity.get_device_control(
+        device.controller.controller_id,
+        device.device_port,
+        __AUTO_MODE_TEMP_FAHRENHEIT_KEYS[entity.data_key],
+        None,
+    )
+
+    if fahrenheit is not None:
+        return (float(fahrenheit) - 32) / 1.8
+
+    # Falling back to the other copy is only sound when the controller keeps
+    # one. With neither, report unknown rather than a setpoint of 0 C that the
+    # controller never held, which a Fahrenheit reader would show as 32 F.
+    return celsius
+
+
 def __get_value_fn_vpd_leaf_temp_offset(
     entity: ACInfinityEntity, controller: ACInfinityController
 ):
@@ -357,13 +419,13 @@ def __set_value_fn_vpd_setting(
 def __set_value_fn_temp_auto_low(
     entity: ACInfinityEntity, device: ACInfinityDevice, value: float
 ):
+    # The app rounds Celsius and derives Fahrenheit from the unrounded input.
+    temp_c = round(value or 0)
     return entity.ac_infinity.update_device_controls(
         device,
         {
-            # value is received from HA as C
-            DeviceControlKey.AUTO_TEMP_LOW_TRIGGER: int(value or 0),
-            # degrees F must be calculated and set in addition to C
-            DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F: int(round((value * 1.8) + 32, 0)),
+            DeviceControlKey.AUTO_TEMP_LOW_TRIGGER: temp_c,
+            DeviceControlKey.AUTO_TEMP_LOW_TRIGGER_F: round(value * 1.8 + 32),
         },
     )
 
@@ -371,13 +433,13 @@ def __set_value_fn_temp_auto_low(
 def __set_value_fn_temp_auto_high(
     entity: ACInfinityEntity, device: ACInfinityDevice, value: float
 ):
+    # The app rounds Celsius and derives Fahrenheit from the unrounded input.
+    temp_c = round(value or 0)
     return entity.ac_infinity.update_device_controls(
         device,
         {
-            # value is received from HA as C
-            DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER: int(value or 0),
-            # degrees F must be calculated and set in addition to C
-            DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F: int(round((value * 1.8) + 32, 0)),
+            DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER: temp_c,
+            DeviceControlKey.AUTO_TEMP_HIGH_TRIGGER_F: round(value * 1.8 + 32),
         },
     )
 
@@ -385,13 +447,13 @@ def __set_value_fn_temp_auto_high(
 def __set_value_fn_target_temp(
     entity: ACInfinityEntity, device: ACInfinityDevice, value: float
 ):
+    # The app rounds Celsius and derives Fahrenheit from the unrounded input.
+    temp_c = round(value or 0)
     return entity.ac_infinity.update_device_controls(
         device,
         {
-            # value is received from HA as C
-            DeviceControlKey.TARGET_TEMP: int(value or 0),
-            # degrees F must be calculated and set in addition to C
-            DeviceControlKey.TARGET_TEMP_F: int(round((value * 1.8) + 32, 0)),
+            DeviceControlKey.TARGET_TEMP: temp_c,
+            DeviceControlKey.TARGET_TEMP_F: round(value * 1.8 + 32),
         },
     )
 
@@ -755,8 +817,8 @@ DEVICE_DESCRIPTIONS: list[ACInfinityDeviceNumberEntityDescription] = [
         icon=None,
         translation_key="auto_mode_temp_low_trigger",
         enabled_fn=enabled_fn_control,
-        suitable_fn=__suitable_fn_device_control_default,
-        get_value_fn=__get_value_fn_device_control_default,
+        suitable_fn=__suitable_fn_auto_mode_temp,
+        get_value_fn=__get_value_fn_auto_mode_temp,
         set_value_fn=__set_value_fn_temp_auto_low,
         at_type_fn=lambda at_type: at_type == AtType.AUTO
     ),
@@ -771,8 +833,8 @@ DEVICE_DESCRIPTIONS: list[ACInfinityDeviceNumberEntityDescription] = [
         icon=None,
         translation_key="auto_mode_temp_high_trigger",
         enabled_fn=enabled_fn_control,
-        suitable_fn=__suitable_fn_device_control_default,
-        get_value_fn=__get_value_fn_device_control_default,
+        suitable_fn=__suitable_fn_auto_mode_temp,
+        get_value_fn=__get_value_fn_auto_mode_temp,
         set_value_fn=__set_value_fn_temp_auto_high,
         at_type_fn=lambda at_type: at_type == AtType.AUTO
     ),
@@ -787,8 +849,8 @@ DEVICE_DESCRIPTIONS: list[ACInfinityDeviceNumberEntityDescription] = [
         icon=None,
         translation_key="target_temp",
         enabled_fn=enabled_fn_control,
-        suitable_fn=__suitable_fn_device_control_default,
-        get_value_fn=__get_value_fn_device_control_default,
+        suitable_fn=__suitable_fn_auto_mode_temp,
+        get_value_fn=__get_value_fn_auto_mode_temp,
         set_value_fn=__set_value_fn_target_temp,
         at_type_fn=lambda at_type: at_type == AtType.AUTO
     ),
