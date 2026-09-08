@@ -601,7 +601,7 @@ DEVICE_DESCRIPTIONS: list[ACInfinityDeviceNumberEntityDescription] = [
     ACInfinityDeviceNumberEntityDescription(
         key=DeviceControlKey.ON_SPEED,
         device_class=NumberDeviceClass.POWER_FACTOR,
-        mode=NumberMode.AUTO,
+        mode=NumberMode.BOX,
         native_min_value=0,
         native_max_value=10,
         native_step=1,
@@ -617,7 +617,7 @@ DEVICE_DESCRIPTIONS: list[ACInfinityDeviceNumberEntityDescription] = [
     ACInfinityDeviceNumberEntityDescription(
         key=DeviceControlKey.OFF_SPEED,
         device_class=NumberDeviceClass.POWER_FACTOR,
-        mode=NumberMode.AUTO,
+        mode=NumberMode.BOX,
         native_min_value=0,
         native_max_value=10,
         native_step=1,
