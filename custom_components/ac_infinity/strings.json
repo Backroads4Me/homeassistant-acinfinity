@@ -271,6 +271,12 @@
       "port_number": {
         "name": "Port Number"
       },
+      "automation_temperature": {
+        "name": "Automation Temperature"
+      },
+      "automation_humidity": {
+        "name": "Automation Humidity"
+      },
       "port_status": {
         "name": "Port Status"
       },

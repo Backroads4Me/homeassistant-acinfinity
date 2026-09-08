@@ -79,7 +79,7 @@ class TestSensors:
             test_objects.entities.add_entities_callback,
         )
 
-        assert len(test_objects.entities._added_entities) == 60
+        assert len(test_objects.entities._added_entities) == 68
 
     async def test_async_setup_entry_temperature_created(self, setup):
         """Sensor for device reported temperature is created on setup for non-ai controllers"""
@@ -1161,6 +1161,44 @@ class TestSensors:
         )
         assert entity.entity_description.device_class == SensorDeviceClass.DURATION
         assert entity.device_info is not None
+
+    @pytest.mark.parametrize(
+        "data_key",
+        [
+            DeviceControlKey.TEMPERATURE,
+            DeviceControlKey.HUMIDITY,
+        ],
+    )
+    @pytest.mark.parametrize("port", [1, 2, 3, 4])
+    async def test_async_setup_automation_readings_for_each_port(
+        self, setup, port, data_key
+    ):
+        """The readings the controller runs a port's automation from are created on setup"""
+
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, port, data_key
+        )
+
+        assert entity.unique_id == f"{DOMAIN}_{MAC_ADDR}_port_{port}_{data_key}"
+        assert entity.device_info is not None
+
+    @pytest.mark.parametrize("value,expected", [(0, 0), (3283, 32.83), (None, 0)])
+    async def test_async_update_automation_temperature_value_correct(
+        self, setup, value, expected
+    ):
+        """The reading is stored as an integer at two digits of precision"""
+
+        test_objects: ACTestObjects = setup
+        entity = await execute_and_get_device_entity(
+            setup, async_setup_entry, 1, DeviceControlKey.TEMPERATURE
+        )
+
+        test_objects.ac_infinity._device_controls[(str(DEVICE_ID), 1)][
+            DeviceControlKey.TEMPERATURE
+        ] = value
+        entity._handle_coordinator_update()
+
+        assert entity.native_value == expected
 
     @pytest.mark.parametrize("port", [1, 2, 3, 4])
     async def test_async_setup_port_number_for_each_port(self, setup, port):

@@ -523,6 +523,24 @@ PORT_STATUS_ACTIVE = "Active"
 PORT_STATUS_INACTIVE = "Inactive"
 
 
+def __suitable_fn_device_control_default(entity: ACInfinityEntity, device: ACInfinityDevice):
+    return entity.ac_infinity.get_device_control_exists(
+        device.controller.controller_id, device.device_port, entity.data_key
+    )
+
+
+def __get_value_fn_device_control_floating_point(
+    entity: ACInfinityEntity, device: ACInfinityDevice
+):
+    # value stored as an integer, but represents a 2 digit precision float
+    return (
+        entity.ac_infinity.get_device_control(
+            device.controller.controller_id, device.device_port, entity.data_key, 0
+        )
+        / 100
+    )
+
+
 def __suitable_fn_device_load_type(entity: ACInfinityEntity, device: ACInfinityDevice):
     return entity.ac_infinity.get_device_control_exists(
         device.controller.controller_id, device.device_port, DeviceControlKey.LOAD_TYPE
@@ -573,6 +591,30 @@ def __get_value_fn_sub_device_id(entity: ACInfinityEntity, device: ACInfinityDev
 
 
 DEVICE_DESCRIPTIONS: list[ACInfinityDeviceSensorEntityDescription] = [
+    ACInfinityDeviceSensorEntityDescription(
+        key=DeviceControlKey.TEMPERATURE,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_unit_of_measurement=None,
+        icon=None,  # default
+        translation_key="automation_temperature",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=__suitable_fn_device_control_default,
+        get_value_fn=__get_value_fn_device_control_floating_point,
+    ),
+    ACInfinityDeviceSensorEntityDescription(
+        key=DeviceControlKey.HUMIDITY,
+        device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_unit_of_measurement=None,
+        icon=None,  # default
+        translation_key="automation_humidity",
+        enabled_fn=enabled_fn_sensor,
+        suitable_fn=__suitable_fn_device_control_default,
+        get_value_fn=__get_value_fn_device_control_floating_point,
+    ),
     ACInfinityDeviceSensorEntityDescription(
         key=CustomDevicePropertyKey.PORT_NUMBER,
         device_class=None,
